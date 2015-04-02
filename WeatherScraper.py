@@ -24,14 +24,14 @@ class WeatherScraper(object):
         self.wwo_apikey = wwo_apikey
         self.wwo_marineurl = "http://api.worldweatheronline.com/free/v2/marine.ashx?key={key}&tide=yes&format=json&q={lat},{lon}"
         self.wwo_searchurl = "http://api.worldweatheronline.com/free/v2/search.ashx?key={key}&q={lat},{lon}&format=json"
-     
+
     def _scrapeAllBBC(self):
         r = requests.get("http://www.bbc.co.uk/weather/coast_and_sea/tide_tables")
         locations = {}
         if r.status_code != 200:
             logger.error("Could not retreive tidal data from the BBC")
             return
-        
+
         root = html.document_fromstring(r.text)
         locs = root.xpath("//a[@data-location-name]")
         for loc in locs:
@@ -45,12 +45,12 @@ class WeatherScraper(object):
         logger.debug("Recorded HREF for {} different locations".format(len(locations)))
         if "Aberystwyth" in locations:
             logger.info("Aberystwyth (a sign of awesomeness) was found in the dataset")
-        
+
         return locations
-        
+
     def milesToKnots(self,miles):
-        return float(miles) * 0.868976 
-    
+        return float(miles) * 0.868976
+
     def locatedInUK(self,lat,lon):
         if lat > 50 and lat <60 and lon < 2 and lon > -10:
             logger.debug("Location {},{} is within the UK".format(lat,lon))
@@ -58,33 +58,61 @@ class WeatherScraper(object):
         else:
             return False
             logger.debug("Location {},{} is not located in the UK".format(lat,lon))
-    
+
+    def milesToBeaufort(self,mph):
+        if mph < 1:
+            return 0
+        elif mph >= 1 and mph <= 3:
+            return 1
+        elif mph >= 4 and mph <= 7:
+            return 2
+        elif mph >= 8 and <= 12:
+            return 3
+        elif mph >= 13 and <= 18:
+            return 4
+        elif mph >= 19 and <= 24:
+            return 5
+        elif mph >= 25 and <= 31:
+            return 6
+        elif mph >= 32 and <= 38:
+            return 7
+        elif mph >= 39 and <= 46:
+            return 8
+        elif mph >= 47 and <= 54:
+            return 9
+        elif mph >= 55 and <= 63:
+            return 10
+        elif mph >= 64 and <= 72:
+            return 11
+        elif mph > 73:
+            return 12
+
     def _makePositive(self,x):
         x = float(x)
         if x > 0:
             return x
         else:
             return x * -1
-    
+
     def _findClosestFromSitelist(self,latX,lonX,wwoLocations):
         if len(wwoLocations) == 1:
             return wwoLocations.keys()[0]
-        
+
         lat = self._makePositive(latX)
         lon = self._makePositive(lonX)
-        
+
         best = {'wwoAreaName':'None','diffSum':179}
         for wwoAreaName in wwoLocations.keys():
             lat_in = self._makePositive(float(wwoLocations[wwoAreaName]['lat']))
             lon_in = self._makePositive(float(wwoLocations[wwoAreaName]['lon']))
-            
+
             diffLat = self._makePositive(lat - lat_in)
             diffLon = self._makePositive(lon - lon_in)
             diffSum = diffLat+diffLon
-            
+
             if diffSum < best['diffSum']:
                 best['wwoAreaName'] = wwoAreaName
-            
+
         return best['wwoAreaName']
 
     def getConditions(self,lat,lon):
@@ -106,37 +134,38 @@ class WeatherScraper(object):
             "highTideTimePretty"=>"17:41",
             "highTideHeightPretty"=>"3.9m",
         """
-        
+
         #Get general tidal weather at that Lat and Lon
         waveUrl = self.wwo_marineurl.format(key=self.wwo_apikey,lat=lat,lon=lon)
-            
+
         ret = requests.get(waveUrl)
         if ret.status_code != 200:
             logger.error("Unable to retrieve maritime weather conditions")
             raise Exception("Unable to locate")
         else:
             logger.debug("Retreived Maritime Conditions")
-            
+
         data = ret.json()
         weather = data['data']['weather'][0]['hourly'][0]
-        
+
         response = {}
         response['windDirection16pt']=weather['winddir16Point']
         response['windDirection']=weather['winddirDegree']
         response['windSpeedKnots']=self.milesToKnots(weather['windspeedMiles'])
-                
+        response['windBeaufort']=self.milesToBeaufort(weather['windspeedMiles'])
+
         #Attempt to scrape the BBC website for tidal info - works only for UK
         if not self.locatedInUK(float(lat),float(lon)):
             logger.debug("Location not within the UK - cannot find tidal data")
             return response
-            
+
         #WWO has an interesting feature where you can give it a lat,lon and get some nearby locations
         locUrl = self.wwo_searchurl.format(key=self.wwo_apikey,lat=lat,lon=lon)
-        
+
         ret = requests.get(locUrl)
         if ret.status_code != 200:
             raise Exception("Unable to reach api")
-        
+
         locData = ret.json()
         wwoLocations = {}
         for loc in locData['search_api']['result']:
@@ -145,23 +174,23 @@ class WeatherScraper(object):
                               'lat':loc['latitude'],
                               'lon':loc['longitude'],
                               }
-        
+
         logger.debug("WWO possible locations for {},{}\n{}".format(lat,lon,wwoLocations.keys()))
-    
+
         matchedWithBBC = {}
         for wwoAreaName in wwoLocations.keys():
             for bbckey in self.bbc_cache.keys():
                 if wwoAreaName.lower() == bbckey.lower():
                     matchedWithBBC[bbckey] = wwoLocations[wwoAreaName]
-        
+
         if not matchedWithBBC:
             logger.debug("Unable to match a location from:'{}' to those with tidal information from the BBC\n{}".format(sorted(wwoLocations),sorted(self.bbc_cache.keys())))
             return response
-        
+
         closestLocationName = self._findClosestFromSitelist(lat, lon, matchedWithBBC)
         logger.debug("Closest location to original lat/lon appears to be {}".format(closestLocationName))
-        
-        tides = None    
+
+        tides = None
         try:
             logger.debug("BBC site matched with WWO location response: {}".format(closestLocationName))
             tides = self.scrapeBBC(location=closestLocationName)
@@ -171,21 +200,21 @@ class WeatherScraper(object):
         if tides:
             logger.debug("Tides \n{}".format(json.dumps(tides,sort_keys=True,indent=4,separators=(',',': '))))
             response.update({'tides':tides})
-                
-        return response 
-             
+
+        return response
+
     def scrapeBBC(self,location):
         directurl = "http://www.bbc.co.uk{}".format(self.bbc_cache[location])
         logger.debug("Attempting to scrape BBC for {} using {}".format(location, directurl))
-        
+
         page = requests.get(directurl)
-        
+
         # Our data is within a table inside <div class="ui-tabs-panel open" id="tide-details0">
         soup = bs4.BeautifulSoup(page.text)
         table = soup.find("div", {"class" : "ui-tabs-panel open"} )
         if table == None:
             logger.error(page.text)
-        
+
         tides = []
         for row in table.findAll("tr"):
             th = row.find('th')
@@ -195,8 +224,5 @@ class WeatherScraper(object):
                 tides.append({'type': th.text, 'time':time.text,'height':height.text})
             else:
                 continue
-    
+
         return tides
-
-
-        
