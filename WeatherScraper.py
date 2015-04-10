@@ -66,23 +66,23 @@ class WeatherScraper(object):
             return 1
         elif mph >= 4 and mph <= 7:
             return 2
-        elif mph >= 8 and <= 12:
+        elif mph >= 8 and mph <= 12:
             return 3
-        elif mph >= 13 and <= 18:
+        elif mph >= 13 and mph <= 18:
             return 4
-        elif mph >= 19 and <= 24:
+        elif mph >= 19 and mph <= 24:
             return 5
-        elif mph >= 25 and <= 31:
+        elif mph >= 25 and mph <= 31:
             return 6
-        elif mph >= 32 and <= 38:
+        elif mph >= 32 and mph <= 38:
             return 7
-        elif mph >= 39 and <= 46:
+        elif mph >= 39 and mph <= 46:
             return 8
-        elif mph >= 47 and <= 54:
+        elif mph >= 47 and mph <= 54:
             return 9
-        elif mph >= 55 and <= 63:
+        elif mph >= 55 and mph <= 63:
             return 10
-        elif mph >= 64 and <= 72:
+        elif mph >= 64 and mph <= 72:
             return 11
         elif mph > 73:
             return 12
