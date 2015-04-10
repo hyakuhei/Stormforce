@@ -67,5 +67,5 @@ def conditions():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     ws = WeatherScraper(wwo_key)
-    app.run()
+    app.run(host='0.0.0.0', debug=False)
     
