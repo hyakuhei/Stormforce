@@ -10,6 +10,7 @@ import requests
 
 import json
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +202,9 @@ class WeatherScraper(object):
             logger.debug("Tides \n{}".format(json.dumps(tides,sort_keys=True,indent=4,separators=(',',': '))))
             response.update({'tides':tides})
 
+        dayofmonth = time.strftime("%d")
+        response['dayofmonth']=int(dayofmonth)
+        
         return response
 
     def scrapeBBC(self,location):
