@@ -148,7 +148,7 @@ class WeatherScraper(object):
 
         data = ret.json()
         weather = data['data']['weather'][0]['hourly'][0]
-        astro = data['data']['weather']['astronomy']
+        astro = data['data']['weather'][0]['astronomy']
 
         response = {}
         response['windDirection16pt']=weather['winddir16Point']
