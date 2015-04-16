@@ -213,6 +213,7 @@ class WeatherScraper(object):
         hour = time.strftime("%H")
         response['dayofmonth']=int(dayofmonth)
         response["hour"]=int(hour)
+        response["lastReport"]=time.strftime("%H:%M")
         
         for tide in tides[:2]:
             if tide['type'] == 'High':
