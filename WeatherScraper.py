@@ -148,6 +148,7 @@ class WeatherScraper(object):
 
         data = ret.json()
         weather = data['data']['weather'][0]['hourly'][0]
+        astro = data['data']['weather']['astronomy']
 
         response = {}
         response['windDirection16pt']=weather['winddir16Point']
@@ -155,8 +156,8 @@ class WeatherScraper(object):
         response['windSpeedKnots']=self.milesToKnots(weather['windspeedMiles'])
         response['windBeaufort']=self.milesToBeaufort(weather['windspeedMiles'])
         sunrise,sunset,swellHeight_m,sigHeight_m,swellDir16Point,swellDir,swellPeriod_secs,waterTemp_C
-        response['sunrise']=weather['sunrise']
-        response['sunset']=weather['sunset']
+        response['sunrise']=astro['sunrise']
+        response['sunset']=astro['sunset']
         response['swellHeight']=weather['swellHeight_m']
         response['waveHeight']=weather['sigHeight_m']
         response['swellDir16pt']=weather['swellDir16Point']
