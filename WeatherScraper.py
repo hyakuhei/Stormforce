@@ -219,9 +219,11 @@ class WeatherScraper(object):
             if tide['type'] == 'High':
                 response['nextHighTideTime']=tide['time']
                 response['nextHighTideHeight']=tide['height']
+                response['nextHighTideHeightPretty']="{0:.1f}m".format(float(tide["height"]))
             elif tide['type'] == 'Low':
                 response['nextLowTideTime']=tide['time']
                 response['nextLowTideHeight']=tide['height']
+                response['nextLowTideHeightPretty']="{0:.1f}m".format(float(tide["height"]))
         
         return response
 
