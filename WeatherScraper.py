@@ -154,6 +154,15 @@ class WeatherScraper(object):
         response['windDirection']=weather['winddirDegree']
         response['windSpeedKnots']=self.milesToKnots(weather['windspeedMiles'])
         response['windBeaufort']=self.milesToBeaufort(weather['windspeedMiles'])
+        sunrise,sunset,swellHeight_m,sigHeight_m,swellDir16Point,swellDir,swellPeriod_secs,waterTemp_C
+        response['sunrise']=weather['sunrise']
+        response['sunset']=weather['sunset']
+        response['swellHeight']=weather['swellHeight_m']
+        response['waveHeight']=weather['sigHeight_m']
+        response['swellDir16pt']=weather['swellDir16Point']
+        response['swellDir']=weather['swellDir']
+        response['swellPeriod']=weather['swellPeriod_secs']
+        response['waterTemp']=weather['waterTemp_C']
 
         #Attempt to scrape the BBC website for tidal info - works only for UK
         if not self.locatedInUK(float(lat),float(lon)):
