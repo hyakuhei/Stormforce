@@ -148,19 +148,15 @@ class WeatherScraper(object):
 
         data = ret.json()
         weather = data['data']['weather'][0]['hourly'][0]
-        astro = data['data']['weather'][0]['astronomy']
 
         response = {}
         response['windDirection16pt']=weather['winddir16Point']
         response['windDirection']=weather['winddirDegree']
         response['windSpeedKnots']=self.milesToKnots(weather['windspeedMiles'])
         response['windBeaufort']=self.milesToBeaufort(weather['windspeedMiles'])
-        sunrise,sunset,swellHeight_m,sigHeight_m,swellDir16Point,swellDir,swellPeriod_secs,waterTemp_C
-        response['sunrise']=astro['sunrise']
-        response['sunset']=astro['sunset']
         response['swellHeight']=weather['swellHeight_m']
         response['waveHeight']=weather['sigHeight_m']
-        response['swellDir16pt']=weather['swellDir16Point']
+        #response['swellDir16pt']=weather['swellDir16Point']
         response['swellDir']=weather['swellDir']
         response['swellPeriod']=weather['swellPeriod_secs']
         response['waterTemp']=weather['waterTemp_C']
@@ -210,10 +206,21 @@ class WeatherScraper(object):
 
         if tides:
             logger.debug("Tides \n{}".format(json.dumps(tides,sort_keys=True,indent=4,separators=(',',': '))))
-            response.update({'tides':tides})
+            #response.update({'tides':tides})
+            #API no longer returns the whole tide set
 
         dayofmonth = time.strftime("%d")
+        hour = time.strftime("%H")
         response['dayofmonth']=int(dayofmonth)
+        response["hour"]=int(hour)
+        
+        for tide in tides[:2]:
+            if tide['type'] == 'High':
+                response['nextHighTideTime']=tide['time']
+                response['nextHighTideHeight']=tide['height']
+            elif tide['type'] == 'Low':
+                response['nextLowTideTime']=tide['time']
+                response['nextLowTideHeight']=tide['height']
         
         return response
 
