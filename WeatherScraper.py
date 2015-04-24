@@ -260,6 +260,7 @@ class WeatherScraper(object):
         
         return days
 
+    #The dataset includes lots of tidal datapoints, this function finds the extremes i.e high and low water
     def getTides(self,dataset):
         tides = []     
         state = 'unknown'
@@ -276,14 +277,16 @@ class WeatherScraper(object):
                 if dataset[i]['height'] > dataset[i-1]['height']:
                     #logger.debug("{} {:.1f}m - Low tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
                     heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    
-                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'Low', 'heightPretty':heightPretty})
+                    thetime = ":".join(dataset[i-1]['time'].split(":")[0:2])
+                    tides.append({'time':thetime, 'height':dataset[i-1]['height'], 'type':'Low', 'heightPretty':heightPretty})
                     state = 'rising'
                     
             if state == 'rising':
                 if dataset[i]['height'] < dataset[i-1]['height']:
                     #logger.debug("{} {:.1f}m - High tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
-                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'High'})
+                    heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
+                    thetime = ":".join(dataset[i-1]['time'].split(":")[0:2])
+                    tides.append({'time':thetime, 'height':dataset[i-1]['height'], 'type':'High', 'heightPretty':heightPretty})
                     state = 'dropping'
                 
             if dataset[i]['height'] == dataset[i-1]['height']:
