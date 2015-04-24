@@ -54,7 +54,6 @@ def conditions():
         raise InvalidAPIUsage('lat/lon Missing', status_code=500)
     
     localConditions = ws.getConditions(request.args['lat'],request.args['lon'])
-
     
     try:
         logger.debug("Got conditions {}".format(json.dumps(localConditions,sort_keys=True,indent=4,separators=(',',': '))))
@@ -62,7 +61,7 @@ def conditions():
         logger.debug("Unable to identify weather for location {},{}".format(request.args['lat'],request.args['lon']))
         abort(500)
         
-    return json.dumps(localConditions)
+    return json.dumps(localConditions,encoding='ascii')
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
