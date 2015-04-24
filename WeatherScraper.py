@@ -13,6 +13,8 @@ import logging
 import time
 import datetime
 
+from TideForecastScraper import TideScraper
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +27,7 @@ class WeatherScraper(object):
         self.wwo_apikey = wwo_apikey
         self.wwo_marineurl = "http://api.worldweatheronline.com/free/v2/marine.ashx?key={key}&tide=yes&format=json&q={lat},{lon}"
         self.wwo_searchurl = "http://api.worldweatheronline.com/free/v2/search.ashx?key={key}&q={lat},{lon}&format=json"
+        self.ts = TideScraper()
 
     def milesToKnots(self,miles):
         return float(miles) * 0.868976
@@ -97,65 +100,6 @@ class WeatherScraper(object):
         return best['name']
 
 
-    #We can't be sure which location is the best
-    def scrapeTideForecast(self,locations,bestguess=None):
-        #Lets try a one-shot with what we believe is the best location first - avoids hammering the API
-        
-        establishedLocation = None
-        
-        if bestguess:
-            logger.debug("Attempting oneshot lookup against {}".format(bestguess))
-            page = requests.post("http://www.tide-forecast.com/locations/catch",data={'query':bestguess})
-            if page.status_code == 200:
-                establishedLocation = bestguess
-            
-        if page.status_code != 200:
-            logger.debug("Oneshot failed, removing {} from locations".format(bestguess))
-            locations.remove(bestguess)
-            for location in locations:
-                page = requests.post("http://www.tide-forecast.com/locations/catch",data={'query':location})
-                if page.status_code == 200:
-                    logger.debug("Lookup for {} succeeded!".format(location))
-                    establishedLocation = location
-                    break
-                else:
-                    logger.debug("Lookup for {} failed".format(location))
-            
-        if page.status_code != 200:
-            #Loop completed without finding anything valuable
-            raise Exception("Couldn't find a viable location")
-        
-        root = html.document_fromstring(page.text)
-        scripts = root.xpath("//script[@src]")
-        locname = None
-        for script in scripts:
-            if establishedLocation.lower() in script.get('src').lower():
-                for part in script.get('src').split("/"):
-                    if establishedLocation.lower() in part.lower():
-                        locname = part.split(".")[0]
-                
-        if not locname:
-            logger.error("Could not find location {}".format(establishedLocation))
-            return
-        
-        data = []
-        page = requests.get("http://www.tide-forecast.com/tides/{}.js".format(locname))
-        if page.status_code != 200:
-            logger.error(page.text)
-            logger.error('locname = {}'.format(locname))
-        for line in page.text.split():
-            cleanline = line.strip('[').strip(',').strip(']')
-            elements = cleanline.split(",")
-            if len(elements) == 4:
-                ld = {'x':int(elements[0]),
-                      'y':int(elements[1]),
-                      'epoch':int(elements[2]),
-                      'height':float(elements[3]),
-                }
-                data.append(ld)
-        
-        return data,establishedLocation
-
     def getConditions(self,lat,lon):
         logger.debug("Attempting to get conditions at {},{}".format(lat,lon))
         """
@@ -215,7 +159,7 @@ class WeatherScraper(object):
         
         try:
             logger.debug("Attempting to find tidal data for any of {}".format(wwoLocations))
-            data,establishedLocation = self.scrapeTideForecast(wwoLocations.keys(),bestguess=closestLocationName)
+            data,establishedLocation = self.ts.scrapeTideForecast(wwoLocations.keys(),bestguess=closestLocationName)
             response['location'] = establishedLocation
         except Exception as e:
             import traceback
@@ -230,13 +174,16 @@ class WeatherScraper(object):
             yesterdayDate = yesterday.strftime("%d-%m-%Y")
             tomorrowDate = tomorrow.strftime("%d-%m-%Y")
             
-            days = self.orderByDays(data)
-            logger.debug("Tides for days: {}".format(days.keys()))
+            tidesToday = self.ts.getTides(data, todayDate)
+            tidesYesterday = self.ts.getTides(data, yesterdayDate)
+            tidesTomorrow = self.ts.getTides(data, tomorrowDate)
             
-            tidesToday = self.getTides(days[todayDate])
-            tidesYesterday = self.getTides(days[yesterdayDate])
-            tidesTomorrow = self.getTides(days[tomorrowDate])
+            logger.debug("Today's Tides: {}".format(tidesToday))
+            
             response['tidesToday'] = tidesToday
+            response['todayDate'] = todayDate
+            response['yesterdayDate'] = yesterdayDate
+            response['tomorrowDate'] = tomorrowDate
             response['tidesTomorrow'] = tidesTomorrow
             response['tidesYesterday'] = tidesYesterday            
 
@@ -246,57 +193,5 @@ class WeatherScraper(object):
         response["lastReport"]=time.strftime("%H:%M")
         
         return response
-    
-    def orderByDays(self,data):
-    #Convert some times
-        days = {}
-        for entry in data:
-            entry['timestr'] = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(entry['epoch']))
-            ydelta = time.localtime(entry['epoch'] + entry['y'])
-            entry['date'] = time.strftime("%d-%m-%Y", ydelta)
-            entry['time'] = time.strftime("%H:%M:%S", ydelta)
-            
-            if entry['date'] not in days:
-                days[entry['date']] = []
-                
-            days[entry['date']].append(entry)
-            
-            #if entry['date'] == '17-04-2015':
-            #   logger.info("{} - {:.1f}m".format(entry['time'],entry['height']))            
-        
-        return days
 
-    #The dataset includes lots of tidal datapoints, this function finds the extremes i.e high and low water
-    def getTides(self,dataset):
-        tides = []     
-        state = 'unknown'
-        for i in range(1,len(dataset)):
-            if state == 'unknown':
-                if dataset[i]['height'] < dataset[i-1]['height']:
-                    state = 'dropping'
-                else:
-                    state = 'rising'
-                
-            #Rather than looking for the lowest value we look for when the tide turns
-            #Possibly need to introduce some countback in case data sets are the same ie slack water
-            if state == 'dropping':
-                if dataset[i]['height'] > dataset[i-1]['height']:
-                    #logger.debug("{} {:.1f}m - Low tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
-                    heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    thetime = ":".join(dataset[i-1]['time'].split(":")[0:2])
-                    tides.append({'time':thetime, 'height':dataset[i-1]['height'], 'type':'Low', 'heightPretty':heightPretty})
-                    state = 'rising'
-                    
-            if state == 'rising':
-                if dataset[i]['height'] < dataset[i-1]['height']:
-                    #logger.debug("{} {:.1f}m - High tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
-                    heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    thetime = ":".join(dataset[i-1]['time'].split(":")[0:2])
-                    tides.append({'time':thetime, 'height':dataset[i-1]['height'], 'type':'High', 'heightPretty':heightPretty})
-                    state = 'dropping'
-                
-            if dataset[i]['height'] == dataset[i-1]['height']:
-                logger.info("Two adjacent tides with height {}m".format(dataset[i]['height']))
-                    
-        return tides
         
