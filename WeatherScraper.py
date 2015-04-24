@@ -101,9 +101,13 @@ class WeatherScraper(object):
     def scrapeTideForecast(self,locations,bestguess=None):
         #Lets try a one-shot with what we believe is the best location first - avoids hammering the API
         
+        establishedLocation = None
+        
         if bestguess:
             logger.debug("Attempting oneshot lookup against {}".format(bestguess))
             page = requests.post("http://www.tide-forecast.com/locations/catch",data={'query':bestguess})
+            if page.status_code == 200:
+                establishedLocation = bestguess
             
         if page.status_code != 200:
             logger.debug("Oneshot failed, removing {} from locations".format(bestguess))
@@ -112,6 +116,7 @@ class WeatherScraper(object):
                 page = requests.post("http://www.tide-forecast.com/locations/catch",data={'query':location})
                 if page.status_code == 200:
                     logger.debug("Lookup for {} succeeded!".format(location))
+                    establishedLocation = location
                     break
                 else:
                     logger.debug("Lookup for {} failed".format(location))
@@ -124,13 +129,13 @@ class WeatherScraper(object):
         scripts = root.xpath("//script[@src]")
         locname = None
         for script in scripts:
-            if location.lower() in script.get('src').lower():
+            if establishedLocation.lower() in script.get('src').lower():
                 for part in script.get('src').split("/"):
-                    if location.lower() in part.lower():
+                    if establishedLocation.lower() in part.lower():
                         locname = part.split(".")[0]
                 
         if not locname:
-            logger.error("Could not find location {}".format(location))
+            logger.error("Could not find location {}".format(establishedLocation))
             return
         
         data = []
@@ -149,7 +154,7 @@ class WeatherScraper(object):
                 }
                 data.append(ld)
         
-        return data
+        return data,establishedLocation
 
     def getConditions(self,lat,lon):
         logger.debug("Attempting to get conditions at {},{}".format(lat,lon))
@@ -210,7 +215,8 @@ class WeatherScraper(object):
         
         try:
             logger.debug("Attempting to find tidal data for any of {}".format(wwoLocations))
-            data = self.scrapeTideForecast(wwoLocations.keys(),bestguess=closestLocationName)
+            data,establishedLocation = self.scrapeTideForecast(wwoLocations.keys(),bestguess=closestLocationName)
+            response['location'] = establishedLocation
         except Exception as e:
             import traceback
             traceback.print_exc()
