@@ -101,14 +101,14 @@ class TideScraper():
                 if dataset[i]['height'] > dataset[i-1]['height']:
                     #logger.debug("{} {:.1f}m - Low tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
                     heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'Low tide', 'heightPretty':heightPretty})
+                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'Low', 'heightPretty':heightPretty})
                     state = 'rising'
                     
             if state == 'rising':
                 if dataset[i]['height'] < dataset[i-1]['height']:
                     #logger.debug("{} {:.1f}m - High tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
                     heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'High tide', 'heightPretty':heightPretty})
+                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'High', 'heightPretty':heightPretty})
                     state = 'dropping'
                 
             if dataset[i]['height'] == dataset[i-1]['height']:
