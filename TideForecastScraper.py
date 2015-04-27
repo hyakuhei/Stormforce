@@ -69,6 +69,7 @@ class TideScraper():
                       'height' : float(elements[3]),
                       'date' : time.strftime("%d-%m-%Y", ydelta),
                       'time' : time.strftime("%H:%M", ydelta),
+                      'utc' : int(elements[2])+int(elements[1]),
                 }
                 data.append(ld)
         
@@ -101,14 +102,14 @@ class TideScraper():
                 if dataset[i]['height'] > dataset[i-1]['height']:
                     #logger.debug("{} {:.1f}m - Low tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
                     heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'Low', 'heightPretty':heightPretty})
+                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'Low', 'heightPretty':heightPretty, 'utc':dataset[i-1]['utc']})
                     state = 'rising'
                     
             if state == 'rising':
                 if dataset[i]['height'] < dataset[i-1]['height']:
                     #logger.debug("{} {:.1f}m - High tide".format(dataset[i-1]['time'],dataset[i-1]['height']))
                     heightPretty = "{:.1f}m".format(dataset[i-1]['height'])
-                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'High', 'heightPretty':heightPretty})
+                    tides.append({'time':dataset[i-1]['time'], 'height':dataset[i-1]['height'], 'type':'High', 'heightPretty':heightPretty, 'utc':dataset[i-1]['utc']})
                     state = 'dropping'
                 
             if dataset[i]['height'] == dataset[i-1]['height']:

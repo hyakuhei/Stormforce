@@ -57,8 +57,9 @@ def conditions():
     
     try:
         logger.debug("Got conditions {}".format(json.dumps(localConditions,sort_keys=True,indent=4,separators=(',',': '))))
-    except:
+    except Exception as e:
         logger.debug("Unable to identify weather for location {},{}".format(request.args['lat'],request.args['lon']))
+        logger.debug(e.message)
         abort(500)
         
     return json.dumps(localConditions,encoding='ascii')
