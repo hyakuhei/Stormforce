@@ -12,6 +12,8 @@ import json
 import logging
 import time
 import datetime
+import traceback
+
 
 from TideForecastScraper import TideScraper
 
@@ -26,6 +28,7 @@ class WeatherScraper(object):
         #self.bbc_cache = self._scrapeBBCLocations()
         self.wwo_apikey = wwo_apikey
         self.wwo_marineurl = "http://api.worldweatheronline.com/free/v2/marine.ashx?key={key}&tide=yes&format=json&q={lat},{lon}"
+        self.genonames_nearbyurl = "http://api.geonames.org/findNearbyPlaceNameJSON?lat={lat}&lng={lon}&username=stormforce"
         self.wwo_searchurl = "http://api.worldweatheronline.com/free/v2/search.ashx?key={key}&q={lat},{lon}&format=json"
         self.ts = TideScraper()
 
@@ -90,7 +93,7 @@ class WeatherScraper(object):
             diffLat = self._makePositive(lat - lat_in)
             diffLon = self._makePositive(lon - lon_in)
             diffSum = diffLat+diffLon
-            
+
             logger.debug("Location {} has a diff score of {}".format(name,diffSum))
 
             if diffSum < best['diffSum']:
@@ -99,6 +102,37 @@ class WeatherScraper(object):
 
         return best['name']
 
+    def geonameLookup(self,lat,lon):
+        r = requests.get(self.genonames_nearbyurl.format(lat=lat,lon=lon))
+        if r.status_code == 200:
+            data = json.loads(r.text)
+            loc = data['geonames'][0]['name']
+            return loc
+        else:
+            return None
+
+    def wwoLocationLookup(self,lat,lon):
+        #WWO has an interesting feature where you can give it a lat,lon and get some nearby locations
+        locUrl = self.wwo_searchurl.format(key=self.wwo_apikey,lat=lat,lon=lon)
+
+        ret = requests.get(locUrl)
+        if ret.status_code != 200:
+            raise Exception("Unable to reach api")
+
+        locData = ret.json()
+        wwoLocations = {}
+        for loc in locData['search_api']['result']:
+                name = loc['areaName'][0]['value']
+                wwoLocations[name] = {
+                              'lat':loc['latitude'],
+                              'lon':loc['longitude'],
+                              }
+
+        logger.debug("WWO possible locations for {},{}\n{}".format(lat,lon,wwoLocations.keys()))
+
+        closestLocationName = self._findClosestFromSitelist(lat, lon, wwoLocations)
+        logger.debug("Closest location to original lat/lon appears to be {}".format(closestLocationName))
+        return closestLocationName, wwoLocations
 
     def getConditions(self,lat,lon):
         logger.debug("Attempting to get conditions at {},{}".format(lat,lon))
@@ -133,65 +167,56 @@ class WeatherScraper(object):
         response['swellPeriod']=weather['swellPeriod_secs']
         response['waterTemp']=weather['waterTemp_C']
 
-        #WWO has an interesting feature where you can give it a lat,lon and get some nearby locations
-        locUrl = self.wwo_searchurl.format(key=self.wwo_apikey,lat=lat,lon=lon)
-
-        ret = requests.get(locUrl)
-        if ret.status_code != 200:
-            raise Exception("Unable to reach api")
-
-        locData = ret.json()
-        wwoLocations = {}
-        for loc in locData['search_api']['result']:
-                name = loc['areaName'][0]['value']
-                wwoLocations[name] = {
-                              'lat':loc['latitude'],
-                              'lon':loc['longitude'],
-                              }
-
-        logger.debug("WWO possible locations for {},{}\n{}".format(lat,lon,wwoLocations.keys()))
-
-        closestLocationName = self._findClosestFromSitelist(lat, lon, wwoLocations)
-        logger.debug("Closest location to original lat/lon appears to be {}".format(closestLocationName))
+        #First off, we try to get the nearest location from GeoNames because their API has lots of capacity
+        #If that doesn't work we'll try to fetch it from WWO
 
         tides = None
         data = None
-        
+
+        closestLocationName = self.geonameLookup(lat=lat,lon=lon)
+        alternates = [closestLocationName]
+        if closestLocationName == None:
+            logger.debug("geonameLookup failed.")
+            closestLocationName, wwodata = self.wwoLocationLookup(lat=lat,lon=lon)
+            alternates = wwodata.keys()
+
+        if closestLocationName == None:
+            logger.debug("wwodata lookup failed too!")
+
         try:
-            logger.debug("Attempting to find tidal data for any of {}".format(wwoLocations))
-            data,establishedLocation = self.ts.scrapeTideForecast(wwoLocations.keys(),bestguess=closestLocationName)
-            response['location'] = establishedLocation
+            logger.debug("Attempting to find tidal data for any of {}".format(alternates))
+            data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-    
+            logger.error(e)
+            return {'error':'error'}
+
+        response['location'] = establishedLocation
+
         if data != None:
             today = datetime.date.today()
             yesterday = today - datetime.timedelta(1)
             tomorrow = today + datetime.timedelta(1)
-            
+
             todayDate = today.strftime("%d-%m-%Y")
             yesterdayDate = yesterday.strftime("%d-%m-%Y")
             tomorrowDate = tomorrow.strftime("%d-%m-%Y")
-            
+
             tidesToday = self.ts.getTides(data, todayDate)
             tidesYesterday = self.ts.getTides(data, yesterdayDate)
             tidesTomorrow = self.ts.getTides(data, tomorrowDate)
-            
+
             logger.debug("Today's Tides: {}".format(tidesToday))
-            
+
             response['tidesToday'] = tidesToday
             response['todayDate'] = todayDate
             response['yesterdayDate'] = yesterdayDate
             response['tomorrowDate'] = tomorrowDate
             response['tidesTomorrow'] = tidesTomorrow
-            response['tidesYesterday'] = tidesYesterday            
+            response['tidesYesterday'] = tidesYesterday
 
         dayofmonth = time.strftime("%d")
         hour = time.strftime("%H")
         response['dayofmonth']=int(dayofmonth)
         response["lastReport"]=time.strftime("%H:%M")
-        
-        return response
 
-        
+        return response
