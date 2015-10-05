@@ -135,7 +135,6 @@ class WeatherScraper(object):
         return closestLocationName, wwoLocations
 
     def getConditions(self,lat,lon):
-        logger.debug("Attempting to get conditions at {},{}".format(lat,lon))
         """
         Get approximate location from WWO
         If that location includes tidal information, return it all pretty
@@ -143,6 +142,7 @@ class WeatherScraper(object):
         """
 
         #Get general tidal weather at that Lat and Lon
+        logger.debug("Attempting to get conditions at {},{}".format(lat,lon))
         waveUrl = self.wwo_marineurl.format(key=self.wwo_apikey,lat=lat,lon=lon)
 
         ret = requests.get(waveUrl)
@@ -152,43 +152,71 @@ class WeatherScraper(object):
         else:
             logger.debug("Retreived Maritime Conditions")
 
+        
+        response = {"hasWeather":False}
         data = ret.json()
-        weather = data['data']['weather'][0]['hourly'][0]
-
-        response = {}
-        response['windDirection16pt']=weather['winddir16Point']
-        response['windDirection']=weather['winddirDegree']
-        response['windSpeedKnots']=self.milesToKnots(weather['windspeedMiles'])
-        response['windBeaufort']=self.milesToBeaufort(weather['windspeedMiles'])
-        response['swellHeight']=weather['swellHeight_m']
-        response['waveHeight']=weather['sigHeight_m']
-        #response['swellDir16pt']=weather['swellDir16Point']
-        response['swellDir']=weather['swellDir']
-        response['swellPeriod']=weather['swellPeriod_secs']
-        response['waterTemp']=weather['waterTemp_C']
-
+        if "weather" not in data["data"]:
+            logger.debug("WWO Maritime Weather Lookup Failed");
+        else:
+            try:
+                weather = data['data']['weather'][0]['hourly'][0]
+                response['windDirection16pt']=weather['winddir16Point']
+                response['windDirection']=weather['winddirDegree']
+                response['windSpeedKnots']=self.milesToKnots(weather['windspeedMiles'])
+                response['windBeaufort']=self.milesToBeaufort(weather['windspeedMiles'])
+                response['swellHeight']=weather['swellHeight_m']
+                response['waveHeight']=weather['sigHeight_m']
+                #response['swellDir16pt']=weather['swellDir16Point']
+                response['swellDir']=weather['swellDir']
+                response['swellPeriod']=weather['swellPeriod_secs']
+                response['waterTemp']=weather['waterTemp_C']
+                
+                response['hasWeather']=False
+            except Exception as e:
+                logger.debug("WWO Maritime Weather is not formatted as expected")
+                logger.debug(ret.json())
+                
         #First off, we try to get the nearest location from GeoNames because their API has lots of capacity
         #If that doesn't work we'll try to fetch it from WWO
 
         tides = None
         data = None
+        
+        # Get a lookup from Geonames
+        # Attempt to scrape just that from tide forecast
+        # If that fails, get a bunch of places from WWO
+        # Scrape tide forecast for each of them
 
         closestLocationName = self.geonameLookup(lat=lat,lon=lon)
         alternates = [closestLocationName]
-        if closestLocationName == None:
-            logger.debug("geonameLookup failed.")
+        if closestLocationName != None:
+            logger.debug("Geonames lookup returned {}".format(closestLocationName))
+            try:
+                logger.debug("Attempting to find tidal data for any of {}".format(alternates))
+                data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
+            except Exception as e:
+                logger.error("WWO Lookup for {} failed".format(closestLocationName))
+                logger.error(e)
+        
+        #if geonames couldn't find data _or_ the tide lookup failed        
+        if closestLocationName == None or data == None:
+            logger.debug("Falling back to WWO lookup")
             closestLocationName, wwodata = self.wwoLocationLookup(lat=lat,lon=lon)
             alternates = wwodata.keys()
-
-        if closestLocationName == None:
-            logger.debug("wwodata lookup failed too!")
-
-        try:
-            logger.debug("Attempting to find tidal data for any of {}".format(alternates))
-            data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
-        except Exception as e:
-            logger.error(e)
-            return {'error':'error'}
+            try:
+                logger.debug("Attempting to find tidal data for any of {}".format(alternates))
+                data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
+            except Exception as e:
+                logger.error(e)
+        
+        if data == None:
+            errordata = {}
+            if closestLocationName != None:
+                errordata['error'] = "No Tide Data"
+                errordata['location'] = closestLocationName
+            else:
+                errordat['error'] = "No Location Match"
+            
 
         response['location'] = establishedLocation
 
