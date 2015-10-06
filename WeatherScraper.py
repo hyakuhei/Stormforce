@@ -121,6 +121,9 @@ class WeatherScraper(object):
 
         locData = ret.json()
         wwoLocations = {}
+        if "search_api" not in locData:
+            return None, {}
+
         for loc in locData['search_api']['result']:
                 name = loc['areaName'][0]['value']
                 wwoLocations[name] = {
@@ -152,7 +155,7 @@ class WeatherScraper(object):
         else:
             logger.debug("Retreived Maritime Conditions")
 
-        
+
         response = {"hasWeather":False}
         data = ret.json()
         if "weather" not in data["data"]:
@@ -170,18 +173,18 @@ class WeatherScraper(object):
                 response['swellDir']=weather['swellDir']
                 response['swellPeriod']=weather['swellPeriod_secs']
                 response['waterTemp']=weather['waterTemp_C']
-                
+
                 response['hasWeather']=False
             except Exception as e:
                 logger.debug("WWO Maritime Weather is not formatted as expected")
                 logger.debug(ret.json())
-                
+
         #First off, we try to get the nearest location from GeoNames because their API has lots of capacity
         #If that doesn't work we'll try to fetch it from WWO
 
         tides = None
         data = None
-        
+
         # Get a lookup from Geonames
         # Attempt to scrape just that from tide forecast
         # If that fails, get a bunch of places from WWO
@@ -197,8 +200,8 @@ class WeatherScraper(object):
             except Exception as e:
                 logger.error("WWO Lookup for {} failed".format(closestLocationName))
                 logger.error(e)
-        
-        #if geonames couldn't find data _or_ the tide lookup failed        
+
+        #if geonames couldn't find data _or_ the tide lookup failed
         if closestLocationName == None or data == None:
             logger.debug("Falling back to WWO lookup")
             closestLocationName, wwodata = self.wwoLocationLookup(lat=lat,lon=lon)
@@ -208,15 +211,11 @@ class WeatherScraper(object):
                 data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
             except Exception as e:
                 logger.error(e)
-        
+
         if data == None:
-            errordata = {}
-            if closestLocationName != None:
-                errordata['error'] = "No Tide Data"
-                errordata['location'] = closestLocationName
-            else:
-                errordat['error'] = "No Location Match"
-            
+            response['error'] = "No Tide Data"
+            response['loctation'] = closestLocationName
+            return response
 
         response['location'] = establishedLocation
 
