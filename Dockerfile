@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
 # Setup a user to run anchor
 RUN adduser --disabled-password --gecos '' stormforce
 WORKDIR /home/stormforce
+RUN echo "hup"
 RUN git clone https://github.com/hyakuhei/Stormforce.git
 WORKDIR /home/stormforce/
 RUN chown stormforce:stormforce *

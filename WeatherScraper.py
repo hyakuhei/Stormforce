@@ -214,7 +214,7 @@ class WeatherScraper(object):
 
         if data == None:
             response['error'] = "No Tide Data"
-            response['loctation'] = closestLocationName
+            response['location'] = closestLocationName
             return response
 
         response['location'] = establishedLocation
