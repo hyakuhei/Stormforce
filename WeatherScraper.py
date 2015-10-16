@@ -16,6 +16,7 @@ import traceback
 
 
 from TideForecastScraper import TideScraper
+from tidesnearme import Tidesnear
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ class WeatherScraper(object):
                 response['swellPeriod']=weather['swellPeriod_secs']
                 response['waterTemp']=weather['waterTemp_C']
 
-                response['hasWeather']=False
+                response['hasWeather']=True
             except Exception as e:
                 logger.debug("WWO Maritime Weather is not formatted as expected")
                 logger.debug(ret.json())
@@ -185,65 +186,24 @@ class WeatherScraper(object):
         tides = None
         data = None
 
-        # Get a lookup from Geonames
-        # Attempt to scrape just that from tide forecast
-        # If that fails, get a bunch of places from WWO
-        # Scrape tide forecast for each of them
-
-        closestLocationName = self.geonameLookup(lat=lat,lon=lon)
-        alternates = [closestLocationName]
-        if closestLocationName != None:
-            logger.debug("Geonames lookup returned {}".format(closestLocationName))
-            try:
-                logger.debug("Attempting to find tidal data for any of {}".format(alternates))
-                data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
-            except Exception as e:
-                logger.error("WWO Lookup for {} failed".format(closestLocationName))
-                logger.error(e)
-
-        #if geonames couldn't find data _or_ the tide lookup failed
-        if closestLocationName == None or data == None:
-            logger.debug("Falling back to WWO lookup")
-            closestLocationName, wwodata = self.wwoLocationLookup(lat=lat,lon=lon)
-            alternates = wwodata.keys()
-            try:
-                logger.debug("Attempting to find tidal data for any of {}".format(alternates))
-                data, establishedLocation = self.ts.scrapeTideForecast(alternates,bestguess=closestLocationName)
-            except Exception as e:
-                logger.error(e)
-
-        if data == None:
-            response['error'] = "No Tide Data"
-            response['location'] = closestLocationName
-            return response
-
-        response['location'] = establishedLocation
-
+        logger.debug("Attempting to get tides at {},{} using tidesnear.me".format(lat,lon))
+        tn = Tidesnear()
+        data = tn.lookupHTML(lat,lon)
         if data != None:
-            today = datetime.date.today()
-            yesterday = today - datetime.timedelta(1)
-            tomorrow = today + datetime.timedelta(1)
+            location = tn.parseLocation(data)
+            tides = tn.parseTides(data)
 
-            todayDate = today.strftime("%d-%m-%Y")
-            yesterdayDate = yesterday.strftime("%d-%m-%Y")
-            tomorrowDate = tomorrow.strftime("%d-%m-%Y")
+            if "Tides & Currents" in location:
+                response = {}
+                response["error"] = "Location Not Found"
+                return response;
 
-            tidesToday = self.ts.getTides(data, todayDate)
-            tidesYesterday = self.ts.getTides(data, yesterdayDate)
-            tidesTomorrow = self.ts.getTides(data, tomorrowDate)
+            response['tidalSource'] = "tidesnear.me"
+            response['location'] = location
+            response['lat'] = lat
+            response['lon'] = lon
+            response['tides'] = tides
 
-            logger.debug("Today's Tides: {}".format(tidesToday))
-
-            response['tidesToday'] = tidesToday
-            response['todayDate'] = todayDate
-            response['yesterdayDate'] = yesterdayDate
-            response['tomorrowDate'] = tomorrowDate
-            response['tidesTomorrow'] = tidesTomorrow
-            response['tidesYesterday'] = tidesYesterday
-
-        dayofmonth = time.strftime("%d")
-        hour = time.strftime("%H")
-        response['dayofmonth']=int(dayofmonth)
-        response["lastReport"]=time.strftime("%H:%M")
-
-        return response
+            return response
+        else:
+            response['error']='tidenear.me error'

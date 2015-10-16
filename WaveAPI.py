@@ -43,29 +43,32 @@ def ohhai():
     return "ohhai!"
 
 @app.route("/conditions")
-def conditions():   
+def conditions():
     logger.debug("Starting Condition Search")
     if 'key' not in request.args:
         logger.debug("API key missing from {}".format(request.args))
         raise InvalidAPIUsage('API Key Missing', status_code=500)
-    
+
     if 'lat' not in request.args or 'lon' not in request.args:
         logger.debug("Call is missing lat or long {}".format(request.args))
         raise InvalidAPIUsage('lat/lon Missing', status_code=500)
-    
+
     localConditions = ws.getConditions(request.args['lat'],request.args['lon'])
-    
+
     try:
         logger.debug("Got conditions {}".format(json.dumps(localConditions,sort_keys=True,indent=4,separators=(',',': '))))
     except Exception as e:
         logger.debug("Unable to identify weather for location {},{}".format(request.args['lat'],request.args['lon']))
         logger.debug(e.message)
         abort(500)
-        
+
     return json.dumps(localConditions,encoding='ascii')
+
+@app.route("/conditionsTN")
+def conditionsTN():
+    logger.debug("Conditons search with tidesnear.me")
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     ws = WeatherScraper(wwo_key)
     app.run(host='0.0.0.0', debug=False)
-    
