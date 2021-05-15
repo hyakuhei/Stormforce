@@ -1,4 +1,4 @@
-# Stormforce - WARNING - UNUSUED and UNMAINTAINED. HERE FOR POSTERITY.
+# Stormforce - WARNING - UNUSED and UNMAINTAINED. HERE FOR POSTERITY.
 
 A simple Flask application that aggregates tidal information from the BBC, WWO
 and other locations in order to perform so processing and make data available
